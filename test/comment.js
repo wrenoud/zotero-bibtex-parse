@@ -1,6 +1,6 @@
 var assert = require('assert'),
     fs = require('fs'),
-    bibtexParse = require('../bibtexParse');
+    bibtexParse = require('../zotero-bibtex-parse');
 
 console.log('starting test');
 var file = 'commentTest.bib';

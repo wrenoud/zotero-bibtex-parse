@@ -1,33 +1,51 @@
-/* start bibtexParse 0.0.12 */
+/* start zoteroBibtexParse 0.0.13 */
 
-//Original work by Henrik Muehe (c) 2010
+// Original work by Henrik Muehe (c) 2010
 //
-//CommonJS port by Mikola Lysenko 2013
+// CommonJS port by Mikola Lysenko 2013
 //
-//Port to Browser lib by ORCID / RCPETERS
+// Port to Browser lib by ORCID / RCPETERS
 //
-//Issues:
-//no comment handling within strings
-//no string concatenation
-//no variable values yet
-//Grammar implemented here:
-//bibtex -> (string | preamble | comment | entry)*;
-//string -> '@STRING' '{' key_equals_value '}';
-//preamble -> '@PREAMBLE' '{' value '}';
-//comment -> '@COMMENT' '{' value '}';
-//entry -> '@' key '{' key ',' key_value_list '}';
-//key_value_list -> key_equals_value (',' key_equals_value)*;
-//key_equals_value -> key '=' value;
-//value -> value_quotes | value_braces | key;
-//value_quotes -> '"' .*? '"'; // not quite
-//value_braces -> '{' .*? '"'; // not quite
+// Additions and slight changes by apcshields, Jul 2014.
+// (Some of which bring this back closer to Lysenko's version.)
+//
+// Issues:
+// no comment handling within strings
+// no string concatenation
+// no variable values yet
+// Grammar implemented here:
+// bibtex -> (string | preamble | comment | entry)*;
+// string -> '@STRING' '{' key_equals_value '}';
+// preamble -> '@PREAMBLE' '{' value '}';
+// comment -> '@COMMENT' '{' value '}';
+// entry -> '@' key '{' key ',' key_value_list '}';
+// key_value_list -> key_equals_value (',' key_equals_value)*;
+// key_equals_value -> key '=' value;
+// value -> value_quotes | value_braces | key;
+// value_quotes -> '"' .*? '"'; // not quite
+// value_braces -> '{' .*? '"'; // not quite
 (function(exports) {
 
 	function BibtexParser() {
-		
+
 		this.pos = 0;
 		this.input = "";
 		this.entries = new Array();
+
+		this.strings = {  // Added from Mikola Lysenko's bibtex-parser. -APCS
+				JAN: "January",
+				FEB: "February",
+				MAR: "March",
+				APR: "April",
+				MAY: "May",
+				JUN: "June",
+				JUL: "July",
+				AUG: "August",
+				SEP: "September",
+				OCT: "October",
+				NOV: "November",
+				DEC: "December"
+		};
 
 		this.currentEntry = "";
 
@@ -113,9 +131,9 @@
 					    throw "Unterminated value";
 				    };
 				};
-			    if (this.input[this.pos] == '\\' && escaped == false) 
+			    if (this.input[this.pos] == '\\' && escaped == false)
 			       escaped == true;
-			    else 
+			    else
 			       escaped == false;
 				this.pos++;
 			};
@@ -152,9 +170,9 @@
 					    throw "Unterminated value:" + this.input.substring(start);
 				    };
 				}
-			    if (this.input[this.pos] == '\\' && escaped == false) 
+			    if (this.input[this.pos] == '\\' && escaped == false)
 			       escaped == true;
-			    else 
+			    else
 			       escaped == false;
 				this.pos++;
 			};
@@ -168,7 +186,9 @@
 				return this.value_quotes();
 			} else {
 				var k = this.key();
-				if (k.match("^[0-9]+$")) {
+				if (this.strings[k.toUpperCase()]) { // Added from Mikola Lysenko's bibtex-parser. -APCS
+					return this.strings[k];
+				} else if (k.match("^[0-9]+$")) {
 					return k;
 				} else {
 					throw "Value expected:" + this.input.substring(start);
@@ -194,7 +214,7 @@
 				}
 				;
 
-				if (this.input[this.pos].match("[a-zA-Z0-9+_:\\./-]")) {
+				if (this.input[this.pos].match("[a-zA-Z0-9+_:\\?\\./-]")) { // Added question marks to handle Zotero going sideways. -APCS
 					this.pos++;
 				} else {
 					return this.input.substring(start, this.pos);
@@ -279,12 +299,12 @@
 			};
 		};
 	};
-	
+
 	function LatexToUTF8 () {
 	   this.uniToLatex = {
 		};
-		
-		
+
+
 		this.latexToUni = {
        "`A": "À", // begin grave
        "`E": "È",
@@ -394,23 +414,23 @@
        "omega": "ψ",
         };
 
-       String.prototype.addSlashes = function() { 
-             //no need to do (str+'') anymore because 'this' can only be a string
+       String.prototype.addSlashes = function() {
+             // no need to do (str+'') anymore because 'this' can only be a string
              return this.replace(/[\\"']/g, '\\$&').replace(/\u0000/g, '\\0');
        }
 
 		for (var idx in this.latexToUni) {
-		   if (this.latexToUni[idx].length > this.maxLatexLength) 
+		   if (this.latexToUni[idx].length > this.maxLatexLength)
 		      this.maxLatexLength =  this.latexToUni[idx].length;
 		   this.uniToLatex[this.latexToUni[idx]] = idx;
-           //console.log('"'+ idx.addSlashes() + '": "' + this.latexToUni[idx].addSlashes() + '"');
-           //console.log(idx.addSlashes() + ' ' + this.latexToUni[idx].addSlashes());
+           // console.log('"'+ idx.addSlashes() + '": "' + this.latexToUni[idx].addSlashes() + '"');
+           // console.log(idx.addSlashes() + ' ' + this.latexToUni[idx].addSlashes());
 		}
 
 		this.longestEscapeMatch = function(value, pos) {
-           var subStringEnd =  pos + 1 + this.maxLatexLength <= value.length ? 
+           var subStringEnd =  pos + 1 + this.maxLatexLength <= value.length ?
 		               pos + 1 + this.maxLatexLength : value.length;
-		   var subStr =  value.substring(pos + 1,subStringEnd);		            
+		   var subStr =  value.substring(pos + 1,subStringEnd);
 		   while (subStr.length > 0) {
 		     if (subStr in this.latexToUni) {
                 break;
@@ -419,7 +439,7 @@
 		   }
 		   return subStr;
 		}
-		
+
 		this.decodeLatex = function(value) {
 		   var newVal = '';
 		   var pos = 0;
@@ -438,7 +458,7 @@
 		        } else {
 		           newVal += value[pos];
 		           pos++;
-		        } 
+		        }
 		   }
 		   return newVal;
 		}
@@ -446,19 +466,19 @@
 		this.encodeLatex = function(value) {
 		   var trans = '';
 		   for (var idx = 0; idx < value.length; ++idx) {
-		        var c = value.charAt(idx); 
+		        var c = value.charAt(idx);
 		        if (c in this.uniToLatex)
 		            trans += '\\' + this.uniToLatex[c];
-		        else 
+		        else
 		           trans += c;
 		   }
 		   return trans;
 		}
-		
+
 	};
-	
+
 	var latexToUTF8 = new LatexToUTF8();
-	
+
 	exports.toJSON = function(bibtex) {
 		var b = new BibtexParser();
 		b.setInput(bibtex);
@@ -489,9 +509,9 @@
 		}
 		console.log(out);
 		return out;
-		
+
 	};
 
 })(typeof exports === 'undefined' ? this['bibtexParse'] = {} : exports);
 
-/* end bibtexParse */
+/* end zoteroBibtexParse */

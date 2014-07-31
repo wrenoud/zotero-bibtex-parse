@@ -1,19 +1,18 @@
 {
-  "name": "bibtex-parse-js",
-  "version": "0.0.12",
-  "description": "A JavaScript library that parses BibTeX to JSON",
-  "main": "bibtexParse.js",
+  "name": "zotero-bibtex-parse",
+  "version": "0.0.13",
+  "description": "A JavaScript library that parses (Zotero-flavor) BibTeX to JSON",
+  "main": "zotero-bibtex-parse.js",
   "directories": {
     "test": "test"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "scripts": {
     "test": "node test/runTest.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ORCID/bibtexParseJs"
+    "url": "https://github.com/apcshields/zotero-bibtex-parse"
   },
   "keywords": [
     "bibtex",
@@ -21,10 +20,10 @@
     "javascript",
     "parser"
   ],
-  "author": "rcpeters",
+  "author": "rcpeters (with minor changes by apcshields)",
   "license": "MIT",
-  "readmeFilename": "README.md",
   "bugs": {
-    "url": "https://github.com/ORCID/bibtexParseJs/issues"
-  }
+    "url": "https://github.com/apcshields/zotero-bibtex-parse/issues"
+  },
+  "homepage": "https://github.com/apcshields/zotero-bibtex-parse"
 }
