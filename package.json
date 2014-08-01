@@ -20,7 +20,10 @@
     "javascript",
     "parser"
   ],
-  "author": "rcpeters (with minor changes by apcshields)",
+  "contributors": [
+    "apcshields",
+    "rcpeters"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/apcshields/zotero-bibtex-parse/issues"
