@@ -13,61 +13,77 @@ _ = require 'underscore-plus'
 # value_braces -> '{' .*? '}'
 
 class BibtexParser
-  position: 0
-  entries: []
   strings: {}
 
-  constructor: (@bibtex) ->
+  bibtexEntries: []
 
+  constructor: (@bibtex) ->
+    #pass
 
   parse: ->
-    while @nextEntry()
-      if _.isString(entryType = @entryType())
+    @bibtexEntries = @findEntries @findInterstices()
+
+    for entry in @bibtexEntries
+      [entryType, entryBody] = @entryType entry
+
+      if not entryType then break # Skip this entry.
+
+      if _.isString entryType
         entryType = entryType.toLowerCase()
 
       switch entryType
-        when 'string' then @stringEntry()
-        when 'preamble' then @preambleEntry()
-        when 'comment' then @commentEntry()
-        else @keyedEntry(entryType)
+        when 'string' then @stringEntry entryBody
+        when 'preamble' then @preambleEntry entryBody
+        when 'comment' then @commentEntry entryBody
+        else @keyedEntry entryType, entryBody
 
       @entries.push #something
 
     return @entries
 
-  nextEntry: ->
-    @position = @bibtex.indexOf('@', @position) + 1
+  findInterstices: ->
+    intersticePattern = /}\s+@/gm
+    interstices = @bibtex.match intersticePattern
 
-  entryType: ->
-    # Look ahead for '{' which is not preceded by a single backslash.
-    # Really should be looking for nor preceded by an odd number of backslashes.
-    end = @bibtex.indexOf '{', @position
+    # Add the start of the first entry.
+    interstices.unshift @bibtex.substring 0, @bibtex.indexOf('@') + 1
 
-    until not @isEscaped(end) \
-    or end is -1
-      end = @bibtex.indexOf '{', @position
+    return interstices
+
+  findEntryPositions: (intersticeStrings) ->
+    entryPositions = []
+    position = 0
+
+    previous = intersticeStrings.shift()
+
+    for interstice in intersticeStrings
+      beginning = @bibtex.indexOf(previous, position) + previous.length
+      end = @bibtex.indexOf interstice, beginning
+
+      if @isEscaped end then break # Wasn't a true interstice; don't break the
+                                   # entry there.
+
+      entryPositions.push [beginning, end - 1]
+
+      position = end
+      previous = interstice
+
+    return entryPositions
+
+  splitEntryTypeAndBody: (entry) ->
+    # Look ahead for '{' which is not escaped with backslashes.
+    end = entry.indexOf '{'
+
+    while (@isEscaped(end) or @isQuoted(end)) and end isnt -1
+      end = entry.indexOf '{', (end + 1)
 
     if end is -1
       return false
 
-    [position, @position] = [@position, end + 1]
-
-    @bibtex[position...end]
-
-  entryBody: ->
-    brackets = 0
-    position = @position
-
-    endMarker = /}\s@/
-
-    end = @bibtex.indexOf
-
-    # look for next instance of } <whitespace> @
-    # how to make sure it isn't inside {} or ""?
-    # >> do this by counting open and close brackets to make sure they come out
-    # the same
-    # >> count quotes to make sure there are an even number
-    # skip brackets/quotes proceeded by odd number of \
+    {
+      type: entry[position...end]
+      body: entry[(end + 1)...]
+    }
 
   stringEntry: ->
     #pass
@@ -81,14 +97,31 @@ class BibtexParser
   keyedEntry: (key) ->
     #pass
 
-  isEscaped: (position) ->
+  isEscaped: (entry, position) ->
     slashes = 0
+    position--
 
-    while @bibtex[position] is '\\'
+    while entry[position] is '\\'
       slashes++
       position--
 
     slashes % 2 is 1
+
+  isQuoted: (entry, position) ->
+    range = entry[0...position]
+    position = 0
+    doubleQuotes = 0
+    singleQuotes = 0
+
+    while position = range.indexOf('"', position) \
+    and not @isEscaped range, position
+      doubleQuotes++
+
+    while position = range.indexOf("'", position) \
+    and not @isEscaped range, position
+      singleQuotes++
+
+    (doubleQuotes % 2 is 1) or (singleQuotes % 2 is 1)
 
 @bibtexParse =
   toJSON: (bibtex) ->
