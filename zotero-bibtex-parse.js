@@ -65,11 +65,12 @@
 			if (canCommentOut == undefined || canCommentOut == null)
 				canCommentOut = true;
 			this.skipWhitespace(canCommentOut);
+
 			if (this.input.substring(this.pos, this.pos + s.length) == s) {
 				this.pos += s.length;
 			} else {
-				throw "Token mismatch, expected " + s + ", found "
-						+ this.input.substring(this.pos);
+				throw "Token mismatch, expected '" + s + "', found '"
+						+ this.input.substr(this.pos, s.length) + "'";
 			};
 			this.skipWhitespace(canCommentOut);
 		};
@@ -214,7 +215,7 @@
 				}
 				;
 
-				if (this.input[this.pos].match("[a-zA-Z0-9+_:\\?\\./-]")) { // Added question marks to handle Zotero going sideways. -APCS
+				if (this.input[this.pos].match(/[a-zA-Z0-9+_:\?\.\/\[\]\-]/)) { // Added question marks to handle Zotero going sideways. -APCS
 					this.pos++;
 				} else {
 					return this.input.substring(start, this.pos);
