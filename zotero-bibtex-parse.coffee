@@ -60,9 +60,6 @@ class BibtexParser
       beginning = @bibtex.indexOf(previous, position) + previous.length
       end = @bibtex.indexOf interstice, beginning
 
-      if @isEscaped end then break # Wasn't a true interstice; don't break the
-                                   # entry there.
-
       entryPositions.push [beginning, end - 1]
 
       position = end
@@ -73,9 +70,6 @@ class BibtexParser
   splitEntryTypeAndBody: (entry) ->
     # Look ahead for '{' which is not escaped with backslashes.
     end = entry.indexOf '{'
-
-    while (@isEscaped(end) or @isQuoted(end)) and end isnt -1
-      end = entry.indexOf '{', (end + 1)
 
     if end is -1
       return false
@@ -96,32 +90,6 @@ class BibtexParser
 
   keyedEntry: (key) ->
     #pass
-
-  isEscaped: (entry, position) ->
-    slashes = 0
-    position--
-
-    while entry[position] is '\\'
-      slashes++
-      position--
-
-    slashes % 2 is 1
-
-  isQuoted: (entry, position) ->
-    range = entry[0...position]
-    position = 0
-    doubleQuotes = 0
-    singleQuotes = 0
-
-    while position = range.indexOf('"', position) \
-    and not @isEscaped range, position
-      doubleQuotes++
-
-    while position = range.indexOf("'", position) \
-    and not @isEscaped range, position
-      singleQuotes++
-
-    (doubleQuotes % 2 is 1) or (singleQuotes % 2 is 1)
 
 @bibtexParse =
   toJSON: (bibtex) ->
