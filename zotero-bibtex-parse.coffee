@@ -16,7 +16,21 @@ _ = require 'underscore-plus'
 # N.B. value_braces is not a valid expansion of string_concat
 
 class BibtexParser
-  strings: {}
+  strings: {
+    jan: 'January'
+    feb: 'February'
+    mar: 'March'
+    apr: 'April'
+    may: 'May'
+    jun: 'June'
+    jul: 'July'
+    aug: 'August'
+    sep: 'September'
+    oct: 'October'
+    nov: 'November'
+    dec: 'December'
+  }
+
   preambles: []
   bibtexEntries: []
 
@@ -95,7 +109,7 @@ class BibtexParser
     return false
 
   preambleEntry: (entryBody) ->
-
+    # Handle possible string concatenation.
 
     @preambles.push entryBody
 
@@ -117,60 +131,101 @@ class BibtexParser
 
     slashes % 2 is 1
 
-  isEscapedWithBrackets: (text, position) ->
-    @previousCharacter(text, position) is '{' \
-    and @nextCharacter(text, position) is '}'
+  isNumeric: (text) ->
+    not _.isBoolean(text) and not _.isNaN(text * 1)
 
-  isDelimitedText: (text, position) ->
-    @isQuotedText(text, position) \
-    or @isBracketedText(text, position) \
-    or @isParenthesizedText(text, position)
-
-  isQuotedText: (text, position) ->
-    # {a\"#\"b} -> false
-    # "a{"}#b\" -> true
-    # "a" # "b" -> false
-    # {ab"#{"} -> true # Would we ever test this?
-
-    # occurences = 0
-    # position = 0
+  splitValueByDelimeters: (text) ->
+    # "value is either :
+    #   an integer,
+    #   everything in between braces,
+    #   or everything between quotes.
+    #   ...also...a single word can be valid if it has been defined as a string.
+    #   [also, string concatenation]"
     #
-    # while (position = text.indexOf '"', position) isnt -1
-    #   if @isEscapedWithBracketstext[position]
-    #
-    # _.size(char for index, char of text[0...position] \
-    #   when char is '"' \
-    #   and not (@previousCharacter(text, index) is '{') \
-    #     and (@nextCharacter(text, index) is '}'))
+    # "Inside the braces, you can have arbitrarily nested pairs of braces.
+    # But braces must also be balanced inside quotes!
+    # Inside quotes, ... You must place [additional] quotes inside braces.
+    # You can have a @ inside a quoted values but not inside a braced value."
 
-  isBracketedText: (text, position) ->
-    left = @countOccurencesOfCharacterInText text[0...position], '{'
-    right = @countOccurencesOfCharacterInText text[0...position], '}'
+    text = text.trim()
 
-    left is right
+    if @isNumeric text then return text * 1
 
-  isParenthesizedText: (text, position) ->
-    left = @countOccurencesOfCharacterInText text[0...position], '('
-    right = @countOccurencesOfCharacterInText text[0...position], ')'
+    # If first character is quotation mark, use nextDelimitingQuotationMark
+    # and go from there. Pursue similar policy with brackets.
+    split = []
+    delimiter = text[0]
+    position = 0
 
-    left is right
+    switch delimiter
+      when '"'
+        position = @nextDelimitingQuotationMark(text[1..])
+      when '{'
+        position = @nextDelimitingBracket
+      when '#'
+        # Keep moving. Evaluated strings and values will automatically be joined.
+        position = 1
+      else
+        # Get string-y bit ("The placeholder (variable/string name) must start
+        # with a letter and can contain any character in [a-z,A-Z,_,0-9].") and
+        # check it against the dictionary of strings.
+        stringPattern = /^a-z[a-z_0-9]+/gi
+        stringPattern.match text
 
-  countOccurencesOfCharacterInText: (text, character) ->
+        string = text[...stringPattern.lastIndex]
+
+        if @strings[string]?
+          return [@strings[string]]
+
+    # Something has gone wrong. Return the original, unsplit value.
+    if not position then return [text]
+
+    split.push text[1...position]
+
+    if position < text.length - 1
+      split = split.concat @splitValueByDelimeters text[(position + 1)..]
+
+    return split
+
+  nextDelimitingQuotationMark: (text) ->
+    position = text.indexOf '"'
+
+    # When the quotation mark is surrounded by unescaped brackets, keep looking.
+    while text[position - 1] is '{' and text[position - 2] isnt '\\' \
+    and text[position + 1] is '}' and position isnt -1
+      position = text.indexOf '"', position + 1
+
+    if position is -1 then return false
+
+    position
+
+  nextDelimitingBracket: (text) ->
+    open = 1
+    closed = 0
+
+    for position, character of text
+      if character is '{' and not @isEscapedWithBackslash(text, position)
+        open++
+      else if character is '}' and not @isEscapedWithBackslash(text, position)
+        closed++
+
+      if open is closed then return position
+
+    return false
+
+  countOccurencesOfCharacterInText: (text, character, isEscapableWithBackslash = true) ->
     occurences = 0
     position = 0
 
     while (position = text.indexOf character, position) isnt -1
-      if not @isEscapedWithBackslash(text, position) then occurences++
+      if isEscapableWithBackslash
+        if not @isEscapedWithBackslash(text, position) then occurences++
+      else
+        occurrences++
 
       position++
 
     return occurences
-
-  nextCharacter: (text, position) ->
-    text[position * 1 + 1]
-
-  previousCharacter: (text, position) ->
-    text[position * 1 - 1]
 
 @bibtexParse =
   toJSON: (bibtex) ->
