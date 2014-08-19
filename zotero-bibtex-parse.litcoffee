@@ -1,239 +1,320 @@
-_ = require 'underscore-plus'
+This file attempts to parse Zotero-generated BibTeX citation files according to
+this [documentation](http://maverick.inria.fr/~Xavier.Decoret/resources/xdkbibtex/bibtex_summary.html)
+(while still being lenient enough to handle what Zotero can sometimes output)
+and present it as useful JSON.
 
-# Grammar implemented here:
-# bibtex -> (string | preamble | comment | entry)*
-# string -> '@STRING' '{' key_equals_value '}'
-# preamble -> '@PREAMBLE' '{' value '}'
-# comment -> '@COMMENT' '{' value '}'
-# entry -> '@' key '{' key ',' key_value_list '}'
-# key_value_list -> key_equals_value (',' key_equals_value)*
-# key_equals_value -> key '=' value
-# value -> value_quotes | value_braces | string_key | string_concat
-# string_concat -> value '#' value
-# value_quotes -> '"' .*? '"'
-# value_braces -> '{' .*? '}'
-#
-# N.B. value_braces is not a valid expansion of string_concat
+The grammar understood here is roughly:
 
-class BibtexParser
-  strings: {
-    jan: 'January'
-    feb: 'February'
-    mar: 'March'
-    apr: 'April'
-    may: 'May'
-    jun: 'June'
-    jul: 'July'
-    aug: 'August'
-    sep: 'September'
-    oct: 'October'
-    nov: 'November'
-    dec: 'December'
-  }
+```
+bibtex -> (string | preamble | comment | entry)*
+string -> '@STRING' '{' key_equals_value '}'
+preamble -> '@PREAMBLE' '{' value '}'
+comment -> '@COMMENT' '{' value '}'
+entry -> '@' key '{' key ',' key_value_list '}'
+key_value_list -> key_equals_value (',' key_equals_value)*
+key_equals_value -> key '=' value
+value -> value_quotes | value_braces | string_key | string_concat
+string_concat -> value '#' value
+value_quotes -> '"' .*? '"'
+value_braces -> '{' .*? '}'
+```
 
-  preambles: []
-  bibtexEntries: []
+N.B. `value_braces` is not a valid expression in `string_concat`
 
-  constructor: (@bibtex) ->
-    #pass
+    _ = require 'underscore-plus'
 
-  parse: ->
-    @bibtexEntries = @findEntryPositions @findInterstices()
+It doesn't seem worth importing a utility library for these.
 
-    for entry in @bibtexEntries
-      [entryType, entryBody] = @splitEntryTypeAndBody entry
+    toNumber = (value) ->
+      value * 1
 
-      if not entryType then break # Skip this entry.
+    isNumeric = (value) ->
+      not _.isBoolean(value) and not _.isNaN(toNumber value)
 
-      entry = switch entryType.toLowerCase()
-        when 'string' then @stringEntry entryBody
-        when 'preamble' then @preambleEntry entryBody
-        when 'comment' then @commentEntry entryBody
-        else @keyedEntry entryType, entryBody
+Start defining the parser:
 
-      if entry
-        @entries.push entry
+    module.exports = class BibtexParser
 
-    return @entries
+Additional values are added to this dictionary when the parser encounters a
+`@string` entry.
 
-  findInterstices: ->
-    intersticePattern = /}\s*@/gm
-    interstices = @bibtex.match intersticePattern
+      strings: {
+        jan: 'January'
+        feb: 'February'
+        mar: 'March'
+        apr: 'April'
+        may: 'May'
+        jun: 'June'
+        jul: 'July'
+        aug: 'August'
+        sep: 'September'
+        oct: 'October'
+        nov: 'November'
+        dec: 'December'
+      }
 
-    # Add the start of the first entry.
-    interstices.unshift @bibtex.substring 0, @bibtex.indexOf('@') + 1
+The `preambles` array holds the contents of `@preamble` entries. String
+variables are parsed and concatenated.
 
-    return interstices
+The `comments` array holds the unmodified contents of `@comment` entries.
+Comments which are not part of formal `@comments` entries are currently ignored.
 
-  findEntryPositions: (intersticeStrings) ->
-    entryPositions = []
-    position = 0
+The `entries` array holds the parsed `@<key>` citation entries.
 
-    previous = intersticeStrings.shift()
+When I'm ready to break backwards-compatibility, these will be merged into one
+array which preserves the order of the entries.
 
-    for interstice in intersticeStrings
-      beginning = @bibtex.indexOf(previous, position) + previous.length
-      end = @bibtex.indexOf interstice, beginning
+      preambles: []
+      comments: []
+      entries: []
 
-      # Wasn't a true interstice; don't break the entry there.
-      if @isEscapedWithBackslash(interstice, end) then break
+      toNumber: toNumber
 
-      entryPositions.push [beginning, end - 1]
+      constructor: (@bibtex) ->
+        #pass
 
-      position = end
-      previous = interstice
+      parse: ->
+        bibtexEntries = @findEntryPositions @findInterstices()
 
-    return entryPositions
+        for entry in bibtexEntries
+          [entryType, entryBody] = @splitEntryTypeAndBody entry
 
-  splitEntryTypeAndBody: (entry) ->
-    entry = @bibtex[entry[0]..entry[1]]
+          if not entryType then break # Skip this entry.
 
-    # Look ahead for '{' which is not escaped with backslashes.
-    end = entry.indexOf '{'
+          entry = switch entryType.toLowerCase()
+            when 'string' then @stringEntry entryBody
+            when 'preamble' then @preambleEntry entryBody
+            when 'comment' then @commentEntry entryBody
+            else @keyedEntry entryType, entryBody
 
-    if end is -1
-      return false
+          if entry
+            @entries.push entry
 
-    [
-      entry[0...end]
-      entryBody: entry[(end + 1)...]
-    ]
+        return @entries
 
-  stringEntry: (entryBody) ->
-    [key, value] = _.map(entryBody.split('='), (s) ->
-      s.replace(/^(?:\s")+|(?:\s")+$/g, '')
-    )
+      findInterstices: ->
+        intersticePattern = /}\s*@/gm
+        interstices = @bibtex.match intersticePattern
 
-    @string[key] = value
+        # Add the start of the first entry.
+        interstices.unshift @bibtex.substring 0, @bibtex.indexOf('@') + 1
 
-    return false
+        return interstices
 
-  preambleEntry: (entryBody) ->
-    # Handle possible string concatenation.
+      findEntryPositions: (intersticeStrings) ->
+        entryPositions = []
+        position = 0
 
-    @preambles.push entryBody
+        previous = intersticeStrings.shift()
 
-    return false
+        for interstice in intersticeStrings
+          beginning = @bibtex.indexOf(previous, position) + previous.length
+          end = @bibtex.indexOf interstice, beginning
 
-  commentEntry: ->
-    #pass
+          # Wasn't a true interstice; don't break the entry there.
+          if @isEscapedWithBackslash(interstice, end) then break
 
-  keyedEntry: (key) ->
-    #pass
+          entryPositions.push [beginning, end - 1]
 
-  isEscapedWithBackslash: (text, position) ->
-    slashes = 0
-    position--
+          position = end
+          previous = interstice
 
-    while text[position] is '\\'
-      slashes++
-      position--
+        return entryPositions
 
-    slashes % 2 is 1
+      splitEntryTypeAndBody: (entry) ->
+        entry = @bibtex[entry[0]..entry[1]]
 
-  isNumeric: (text) ->
-    not _.isBoolean(text) and not _.isNaN(text * 1)
+        # Look ahead for '{' which is not escaped with backslashes.
+        end = entry.indexOf '{'
 
-  splitValueByDelimeters: (text) ->
-    # "value is either :
-    #   an integer,
-    #   everything in between braces,
-    #   or everything between quotes.
-    #   ...also...a single word can be valid if it has been defined as a string.
-    #   [also, string concatenation]"
-    #
-    # "Inside the braces, you can have arbitrarily nested pairs of braces.
-    # But braces must also be balanced inside quotes!
-    # Inside quotes, ... You must place [additional] quotes inside braces.
-    # You can have a @ inside a quoted values but not inside a braced value."
+        if end is -1
+          return false
 
-    text = text.trim()
+        [
+          entry[0...end]
+          entry[(end + 1)...]
+        ]
 
-    if @isNumeric text then return text * 1
+      stringEntry: (entryBody) ->
 
-    # If first character is quotation mark, use nextDelimitingQuotationMark
-    # and go from there. Pursue similar policy with brackets.
-    split = []
-    delimiter = text[0]
-    position = 0
+Splits the incoming string by the equals sign and then performs the equivalent
+of `s.trim()` and removing leading or trailing quotations from each portion.
 
-    switch delimiter
-      when '"'
-        position = @nextDelimitingQuotationMark(text[1..])
-      when '{'
-        position = @nextDelimitingBracket
-      when '#'
-        # Keep moving. Evaluated strings and values will automatically be joined.
-        position = 1
-      else
-        # Get string-y bit ("The placeholder (variable/string name) must start
-        # with a letter and can contain any character in [a-z,A-Z,_,0-9].") and
-        # check it against the dictionary of strings.
-        stringPattern = /^a-z[a-z_0-9]+/gi
-        stringPattern.match text
+        [key, value] =_.map(entryBody.split('='), (s) ->
+          s.replace(/^(?:\s"?)+|(?:"?\s)+$/g, '')
+        )
 
-        string = text[...stringPattern.lastIndex]
+        @strings[key] = value
 
-        if @strings[string]?
-          return [@strings[string]]
+        return false
 
-    # Something has gone wrong. Return the original, unsplit value.
-    if not position then return [text]
+      preambleEntry: (entryBody) ->
 
-    split.push text[1...position]
+Handle possible string concatenation.
 
-    if position < text.length - 1
-      split = split.concat @splitValueByDelimeters text[(position + 1)..]
+        entryBody = @splitValueByDelimiters entryBody
 
-    return split
+        @preambles.push entryBody.join ''
 
-  nextDelimitingQuotationMark: (text) ->
-    position = text.indexOf '"'
+        return false
 
-    # When the quotation mark is surrounded by unescaped brackets, keep looking.
-    while text[position - 1] is '{' and text[position - 2] isnt '\\' \
-    and text[position + 1] is '}' and position isnt -1
-      position = text.indexOf '"', position + 1
+      commentEntry: (entryBody) ->
+        @commentEntry.push entryBody
 
-    if position is -1 then return false
+        return false
 
-    position
+      keyedEntry: (key, body) ->
+        entry = {
+          entryType: key
+          citationKey: ''
+          entryTags: {}
+        }
 
-  nextDelimitingBracket: (text) ->
-    open = 1
-    closed = 0
+Split entry body by line:
 
-    for position, character of text
-      if character is '{' and not @isEscapedWithBackslash(text, position)
-        open++
-      else if character is '}' and not @isEscapedWithBackslash(text, position)
-        closed++
+        body = body.split('\n')
 
-      if open is closed then return position
+The first line is the citation key.
 
-    return false
+        entry.citationKey = body.shift()
 
-  countOccurencesOfCharacterInText: (text, character, isEscapableWithBackslash = true) ->
-    occurences = 0
-    position = 0
+Iterate over the remaining lines of the body and parse the tags:
 
-    while (position = text.indexOf character, position) isnt -1
-      if isEscapableWithBackslash
-        if not @isEscapedWithBackslash(text, position) then occurences++
-      else
-        occurrences++
+        for line in body
+          [key, value] = _.invoke(line.split('='), 'trim')
 
-      position++
+Blank lines will not have a valid `key = value`, so ignore.
 
-    return occurences
+          if value
 
-@bibtexParse =
-  toJSON: (bibtex) ->
-    parser = new BibtexParser bibtex
+If the line ended in a comma, ignore.
 
-    parser.parse()
-  toBibtex: (json) ->
-    # pass
+            if _.last(value) is ',' then value = value[...(value.length - 1)]
 
-if module.exports?
-  module.exports = @bibtexParse
+            entry.entryTags[key] = @splitValueByDelimiters(value).join ''
+
+        return entry
+
+      isEscapedWithBackslash: (text, position) ->
+        slashes = 0
+        position--
+
+        while text[position] is '\\'
+          slashes++
+          position--
+
+        slashes % 2 is 1
+
+> value is either :
+> * an integer,
+> * everything in between braces,
+> * or everything between quotes.
+> * ...also...a single word can be valid if it has been defined as a string.
+> * [also, string concatenation]
+
+
+> Inside the braces, you can have arbitrarily nested pairs of braces. But braces
+> must also be balanced inside quotes! Inside quotes, ... You must place
+> [additional] quotes inside braces. You can have a `@` inside a quoted values
+> but not inside a braced value.
+
+      splitValueByDelimiters: (text) ->
+        text = text.trim()
+
+        if isNumeric text then return text * 1
+
+        # If first character is quotation mark, use nextDelimitingQuotationMark
+        # and go from there. Pursue similar policy with brackets.
+        split = []
+        delimiter = text[0]
+        position = 0
+        value = ''
+
+        switch delimiter
+          when '"'
+            position = toNumber(@nextDelimitingQuotationMark(text[1..])) + 1
+
+            value = text[1...position]
+          when '{'
+            position = toNumber(@nextDelimitingBracket(text[1..])) + 1
+
+            value = text[1...position]
+          when '#'
+            # Keep moving. Evaluated strings and values will automatically be
+            # joined.
+            position = 1
+          else
+
+Get string-y bit:
+
+> The placeholder (variable/string name) must start with a letter and can
+> contain any character in `[a-z,A-Z,_,0-9]`.
+
+and check it against the dictionary of strings.
+
+            stringPattern = /^[a-z][a-z_0-9]*/gi
+            stringPattern.exec text
+
+            position = stringPattern.lastIndex
+            string = text[...position]
+
+            if @strings[string]?
+              value = @strings[string]
+
+If:
+
+* the initial delimiter was a quote and the closing quote wasn't found,
+* the initial delimiter was an open brace and the closing brace wasn't found, or
+* the initial delimiter was not `"`, `{`, `#`, or an alphabetic character
+
+then position is 0 and value is an empty string—text was effectively
+unparseable, so it should be returned unchanged.
+
+
+        if not position then return [text]
+
+        if value
+          split.push value
+
+        if position < text.length - 1
+          split = split.concat @splitValueByDelimiters text[(position + 1)..]
+
+        return split
+
+      nextDelimitingQuotationMark: (text) ->
+        position = text.indexOf '"'
+
+        # When the quotation mark is surrounded by unescaped brackets, keep looking.
+        while text[position - 1] is '{' and text[position - 2] isnt '\\' \
+        and text[position + 1] is '}' and position isnt -1
+          position = text.indexOf '"', position + 1
+
+        position
+
+      nextDelimitingBracket: (text) ->
+        open = 1
+        closed = 0
+
+        for position, character of text
+          if character is '{' and not @isEscapedWithBackslash(text, position)
+            open++
+          else if character is '}' and not @isEscapedWithBackslash(text, position)
+            closed++
+
+          if open is closed then return position
+
+        return -1
+
+      countOccurencesOfCharacterInText: (text, character, isEscapableWithBackslash = true) ->
+        occurences = 0
+        position = 0
+
+        while (position = text.indexOf character, position) isnt -1
+          if isEscapableWithBackslash
+            if not @isEscapedWithBackslash(text, position) then occurences++
+          else
+            occurrences++
+
+          position++
+
+        return occurences
