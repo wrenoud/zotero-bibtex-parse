@@ -19,7 +19,8 @@ value_quotes -> '"' .*? '"'
 value_braces -> '{' .*? '}'
 ```
 
-N.B. `value_braces` is not a valid expression in `string_concat`
+N.B. `value_braces` is not technically a valid expression in `string_concat`,
+but this parser accepts it.
 
     _ = require 'underscore-plus'
 
