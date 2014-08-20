@@ -13,7 +13,7 @@ comment -> '@COMMENT' '{' value '}'
 entry -> '@' key '{' key ',' key_value_list '}'
 key_value_list -> key_equals_value (',' key_equals_value)*
 key_equals_value -> key '=' value
-value -> value_quotes | value_braces | string_key | string_concat
+value -> value_quotes | value_braces | string_concat | string_key | number
 string_concat -> value '#' value
 value_quotes -> '"' .*? '"'
 value_braces -> '{' .*? '}'
