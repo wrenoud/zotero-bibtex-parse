@@ -326,17 +326,3 @@ unparseable, so it should be returned unchanged.
           if open is closed then return position
 
         return -1
-
-      countOccurencesOfCharacterInText: (text, character, isEscapableWithBackslash = true) ->
-        occurences = 0
-        position = 0
-
-        while (position = text.indexOf character, position) isnt -1
-          if isEscapableWithBackslash
-            if not @isEscapedWithBackslash(text, position) then occurences++
-          else
-            occurrences++
-
-          position++
-
-        return occurences
