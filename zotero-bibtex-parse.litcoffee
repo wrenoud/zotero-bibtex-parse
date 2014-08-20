@@ -31,6 +31,22 @@ It doesn't seem worth importing a utility library for these.
     isNumeric = (value) ->
       not _.isBoolean(value) and not _.isNaN(toNumber value)
 
+    trimTrailingComma = (value) ->
+      if _.last(value) is ',' then value = value[...(value.length - 1)]
+
+      return value
+
+Essentially `Array.join`, but if the array is only one element, return that
+element intact.
+
+This prevents turning arrays with a single numeric element into strings.
+
+    safelyJoinArrayElements = (array, separator) ->
+      if array.length > 1
+        array.join(separator)
+      else
+        array[0]
+
 Start defining the parser:
 
     module.exports = class BibtexParser
@@ -74,7 +90,7 @@ array which preserves the order of the entries.
         #pass
 
       parse: ->
-        bibtexEntries = @findEntryPositions @findInterstices()
+        bibtexEntries = @findEntries()
 
         for entry in bibtexEntries
           [entryType, entryBody] = @splitEntryTypeAndBody entry
@@ -92,38 +108,44 @@ array which preserves the order of the entries.
 
         return @entries
 
-      findInterstices: ->
-        intersticePattern = /}\s*@/gm
-        interstices = @bibtex.match intersticePattern
-
-        # Add the start of the first entry.
-        interstices.unshift @bibtex.substring 0, @bibtex.indexOf('@') + 1
-
-        return interstices
-
-      findEntryPositions: (intersticeStrings) ->
-        entryPositions = []
+      findEntries: ->
+        ats = []
         position = 0
 
-        previous = intersticeStrings.shift()
+Find all the `@`s that are not escaped.
 
-        for interstice in intersticeStrings
-          beginning = @bibtex.indexOf(previous, position) + previous.length
-          end = @bibtex.indexOf interstice, beginning
+        while (position = @bibtex.indexOf('@', position)) isnt -1
+          if not @isEscapedWithBackslash(@bibtex[position])
+            ats.push position
 
-          # Wasn't a true interstice; don't break the entry there.
-          if @isEscapedWithBackslash(interstice, end) then break
+          position++
 
-          entryPositions.push [beginning, end - 1]
+        entries = []
+        numberOfEntries = ats.length
 
-          position = end
-          previous = interstice
+For each of the `@`s that is not escaped:
+1. Get the next such `@`
+2. Look backwards from it for the most recent closing bracket
+3. ...that's the end of the entry
 
-        return entryPositions
+
+        for index, position of ats
+          index = toNumber(index) # It's assumed a string key.
+
+          start = position + 1
+
+          if index + 1 < numberOfEntries
+            next = ats[index + 1]
+          else
+            next = @bibtex.length - 1
+
+          end = _.lastIndexOf @bibtex[...next], '}'
+
+          entries.push @bibtex[start...end]
+
+        return entries
 
       splitEntryTypeAndBody: (entry) ->
-        entry = @bibtex[entry[0]..entry[1]]
-
         # Look ahead for '{' which is not escaped with backslashes.
         end = entry.indexOf '{'
 
@@ -152,18 +174,18 @@ of `s.trim()` and removing leading or trailing quotations from each portion.
 
 Handle possible string concatenation.
 
-        entryBody = @splitValueByDelimiters entryBody
-
-        @preambles.push entryBody.join ''
+        @preambles.push safelyJoinArrayElements(@splitValueByDelimiters(entryBody), '')
 
         return false
 
       commentEntry: (entryBody) ->
+
         @commentEntry.push entryBody
 
         return false
 
       keyedEntry: (key, body) ->
+
         entry = {
           entryType: key
           citationKey: ''
@@ -174,9 +196,9 @@ Split entry body by line:
 
         body = body.split('\n')
 
-The first line is the citation key.
+The first line is the citation key (minus any trailing comma).
 
-        entry.citationKey = body.shift()
+        entry.citationKey = trimTrailingComma body.shift()
 
 Iterate over the remaining lines of the body and parse the tags:
 
@@ -187,11 +209,11 @@ Blank lines will not have a valid `key = value`, so ignore.
 
           if value
 
-If the line ended in a comma, ignore.
+If the line ended in a comma, ignore it.
 
-            if _.last(value) is ',' then value = value[...(value.length - 1)]
+            value = trimTrailingComma value
 
-            entry.entryTags[key] = @splitValueByDelimiters(value).join ''
+            entry.entryTags[key] = safelyJoinArrayElements(@splitValueByDelimiters(value), '')
 
         return entry
 
@@ -221,7 +243,7 @@ If the line ended in a comma, ignore.
       splitValueByDelimiters: (text) ->
         text = text.trim()
 
-        if isNumeric text then return text * 1
+        if isNumeric text then return [text * 1]
 
         # If first character is quotation mark, use nextDelimitingQuotationMark
         # and go from there. Pursue similar policy with brackets.
@@ -277,7 +299,7 @@ unparseable, so it should be returned unchanged.
           split.push value
 
         if position < text.length - 1
-          split = split.concat @splitValueByDelimiters text[(position + 1)..]
+          split = split.concat @splitValueByDelimiters(text[(position + 1)..])
 
         return split
 
