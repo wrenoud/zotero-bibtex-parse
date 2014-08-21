@@ -32,11 +32,6 @@ It doesn't seem worth importing a utility library for these.
     isNumeric = (value) ->
       not _.isBoolean(value) and not _.isNaN(toNumber value)
 
-    trimTrailingComma = (value) ->
-      if _.last(value) is ',' then value = value[...(value.length - 1)]
-
-      return value
-
 Essentially `Array.join`, but if the array is only one element, return that
 element intact.
 
@@ -113,32 +108,40 @@ array which preserves the order of the entries.
         ats = []
         position = 0
 
-Find all the `@`s that are not escaped.
+Find all `@`s.
 
         while (position = @bibtex.indexOf('@', position)) isnt -1
-          if not @isEscapedWithBackslash(@bibtex[position])
-            ats.push position
+          ats.push position
 
           position++
 
-        entries = []
-        numberOfEntries = ats.length
+Filter the `@`s so that only the ones outside of quotes are kept.
 
-For each of the `@`s that is not escaped:
+        delimitingAts = []
+        lastDelimitingAt = 0
+
+        for position in ats
+          if @areBracketsBalanced @bibtex[lastDelimitingAt...position]
+            delimitingAts.push lastDelimitingAt = position
+
+        entries = []
+        numberOfEntries = delimitingAts.length
+
+For each of the delimiting `@`s:
 1. Get the next such `@`
 2. Look backwards from it for the most recent closing bracket
 3. ...that's the end of the entry
 
 
-        for index, position of ats
+        for index, position of delimitingAts
           index = toNumber(index) # It's assumed a string key.
 
           start = position + 1
 
           if index + 1 < numberOfEntries
-            next = ats[index + 1]
+            next = delimitingAts[index + 1]
           else
-            next = @bibtex.length - 1
+            next = @bibtex.length
 
           end = _.lastIndexOf @bibtex[...next], '}'
 
@@ -193,13 +196,13 @@ Handle possible string concatenation.
           entryTags: {}
         }
 
-Split entry body by line:
+Split entry body by newline + comma:
 
-        body = body.split('\n')
+        body = body.split(',\n')
 
-The first line is the citation key (minus any trailing comma).
+The first line is the citation key.
 
-        entry.citationKey = trimTrailingComma body.shift()
+        entry.citationKey = body.shift()
 
 Iterate over the remaining lines of the body and parse the tags:
 
@@ -209,11 +212,6 @@ Iterate over the remaining lines of the body and parse the tags:
 Blank lines will not have a valid `key = value`, so ignore.
 
           if value
-
-If the line ended in a comma, ignore it.
-
-            value = trimTrailingComma value
-
             entry.entryTags[key] = safelyJoinArrayElements(@splitValueByDelimiters(value), '')
 
         return entry
@@ -327,3 +325,22 @@ unparseable, so it should be returned unchanged.
           if open is closed then return position
 
         return -1
+
+      areBracketsBalanced: (text, start, end) ->
+        numberOfOpeningBrackets = 0
+        numberOfClosingBrackets = 0
+
+        for position, character of text[start..end]
+          if character is '{' and not @isEscapedWithBackslash(text, toNumber(position))
+            numberOfOpeningBrackets++
+          else if character is '}' and not @isEscapedWithBackslash(text, toNumber(position))
+            numberOfClosingBrackets++
+
+Just in case the end of our text was delimited by brackets, as in `{@}`. This
+isn't an obvious thing for this method to do, but it shouldn't return a false
+positive, and it may reduce false negatives.
+
+        if text[end - 1] is '{' and text[end + 1] is '}' and not @isEscapedWithBackslash(text, end - 1) and not @isEscapedWithBackslash(text, end + 1)
+          numberOfClosingBrackets++
+
+        numberOfOpeningBrackets is numberOfClosingBrackets
