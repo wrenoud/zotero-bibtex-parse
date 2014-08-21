@@ -313,16 +313,16 @@ unparseable, so it should be returned unchanged.
         position
 
       nextDelimitingBracket: (text) ->
-        open = 1
-        closed = 0
+        numberOfOpeningBrackets = 1
+        numberOfClosingBrackets = 0
 
         for position, character of text
           if character is '{' and not @isEscapedWithBackslash(text, position)
-            open++
+            numberOfOpeningBrackets++
           else if character is '}' and not @isEscapedWithBackslash(text, position)
-            closed++
+            numberOfClosingBrackets++
 
-          if open is closed then return position
+          if numberOfOpeningBrackets is numberOfClosingBrackets then return position
 
         return -1
 
