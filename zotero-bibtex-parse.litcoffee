@@ -65,19 +65,14 @@ Additional values are added to this dictionary when the parser encounters a
         dec: 'December'
       }
 
-The `preambles` array holds the contents of `@preamble` entries. String
-variables are parsed and concatenated.
+The `entries` array holds three types of entries:
+1. The contents of `@preamble` entries. String variables are parsed and
+   concatenated.
+2. The unmodified contents of `@comment` entries. Comments which are not part of
+   formal `@comments` entries are currently ignored.
+3. The parsed `@<key>` citation entries.
 
-The `comments` array holds the unmodified contents of `@comment` entries.
-Comments which are not part of formal `@comments` entries are currently ignored.
 
-The `entries` array holds the parsed `@<key>` citation entries.
-
-When I'm ready to break backwards-compatibility, these will be merged into one
-array which preserves the order of the entries.
-
-      preambles: []
-      comments: []
       entries: []
 
       toNumber: toNumber
@@ -175,18 +170,19 @@ of `s.trim()` and removing leading or trailing quotations from each portion.
         return false
 
       preambleEntry: (entryBody) ->
+        entry = {
+          entryType: 'preamble'
 
 Handle possible string concatenation.
 
-        @preambles.push safelyJoinArrayElements(@splitValueByDelimiters(entryBody), '')
-
-        return false
+          entry: safelyJoinArrayElements(@splitValueByDelimiters(entryBody), '')
+        }
 
       commentEntry: (entryBody) ->
-
-        @commentEntry.push entryBody
-
-        return false
+        entry = {
+          entryType: 'comment'
+          entry: entryBody
+        }
 
       keyedEntry: (key, body) ->
 
@@ -215,6 +211,12 @@ Blank lines will not have a valid `key = value`, so ignore.
             entry.entryTags[key] = safelyJoinArrayElements(@splitValueByDelimiters(value), '')
 
         return entry
+
+> ...some characters can not be put directly into a BibTeX-entry, as they would
+> conflict with the format description, like {, " or $. They need to be escaped
+> using a backslash (\).
+
+(http://www.bibtex.org/SpecialSymbols/)
 
       isEscapedWithBackslash: (text, position) ->
         slashes = 0
