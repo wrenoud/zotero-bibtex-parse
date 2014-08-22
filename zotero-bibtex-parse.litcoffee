@@ -82,7 +82,7 @@ The `entries` array holds three types of entries:
         bibtexEntries = @findEntries()
 
         for entry in bibtexEntries
-          [entryType, entryBody] = _.invoke(@splitEntryTypeAndBody(entry), 'trim')
+          [entryType, entryBody] = _.invoke(entry, 'trim')
 
           if not entryType then break # Skip this entry.
 
@@ -114,7 +114,7 @@ Filter the `@`s so that only the ones outside of string delimiters are kept.
         lastDelimitingAt = 0
 
         for position in ats
-          if @areStringDelimitersBalanced @bibtex[lastDelimitingAt...position]
+          if @areEntryDelimitersBalanced @bibtex[lastDelimitingAt...position]
             delimitingAts.push lastDelimitingAt = position
 
         entries = []
@@ -122,64 +122,58 @@ Filter the `@`s so that only the ones outside of string delimiters are kept.
         delimitingAts = _.rest(delimitingAts).concat(@bibtex.length)
 
 For each of the delimiting `@`s:
-1. Get the next such `@`
-2. Look backwards from it for the most recent closing bracket
+1. Get the next unescaped opening parenthesis or bracket
+2. Look for the next delimiting closing parenthesis or bracket
 3. ...that's the end of the entry
 
 
         for position in delimitingAts
-          start = lastDelimitingAt + 1
+          possibleEntry = @bibtex[lastDelimitingAt...position]
 
-Go through the intervening string backwards looking for a closing bracket or
-parenthesis.
+          lastDelimitingAt = position
 
-N.B. This doesn't yet handle a case with an informal comment like:
-
-```bibtex
-@article {
-  title: {Leadership and trust in the {Iliad}}
-  author: {James Gould}
-}
-
-article {
-  title: {Inflection of irregular {Homeric} verbs}
-  author: {Lawrence Cantrell}
-}
-
-@book {
-  title: {Divine speech in {Homeric} and pseudo-{Homeric} poetry}
-  author: {Hedley Mansfield}
-}
-```
-
-This will, unfortunately, parse "Leadership and trust in the Iliad" and
-"Inflection of irregular Homeric verbs" together, in this case overwriting all
-the fields of "Leadership" with those of "Inflection"!
-
-          for character in @bibtex[...position] by -1
-            if character is '}' or character is ')'
-              end = character
+          for index, character of possibleEntry
+            if (character is '{' or character is '(') and not @isEscapedWithBackslash(possibleEntry, character)
+              startOfBody = toNumber index
               break
 
-          end = _.lastIndexOf @bibtex[...position], '}'
+If there were no unescaped opening parentheses or brackets, this block can't be
+parsed—just skip it.
 
-          entries.push @bibtex[start...end]
-
-        return entries
-
-      splitEntryTypeAndBody: (entry) ->
-        for character in entry
-          if (character is '{' or character is '(') and not @isEscapedWithBackslash(entry, character)
-            end = character
+          if not startOfBody?
             break
 
-        if not end?
-          return false
+          delimitingCharacter = possibleEntry[startOfBody]
 
-        [
-          entry[0...end]
-          entry[(end + 1)...]
-        ]
+          switch delimitingCharacter
+            when '{'
+              lengthOfBody = @nextDelimitingBracket possibleEntry[(startOfBody + 1)..]
+            when '('
+              lengthOfBody = @nextDelimitingParenthesis possibleEntry[(startOfBody + 1)..]
+
+If lengthOfBody is -1, a closing delimiter couldn't be found. Because the parser
+ignores `@`s which are inside delimiters, this shouldn't happen unless this is
+the last entry in the file.
+
+          if lengthOfBody? and lengthOfBody isnt -1
+            endOfBody = startOfBody + lengthOfBody + 1
+          else
+            endOfBody = possibleEntry.length
+
+          entries.push [
+            possibleEntry[1...startOfBody]
+            possibleEntry[(startOfBody + 1)...endOfBody]
+          ]
+
+Check for an informal comment (any text that isn't inside an `@` block) and
+append it if there happens to be one.
+
+          informalCommentEntry = @informalCommentEntry(possibleEntry[(endOfBody + 1)..])
+
+          if informalCommentEntry
+            entries.push informalCommentEntry
+
+        return entries
 
       stringEntry: (entryBody) ->
 
@@ -209,8 +203,18 @@ Handle possible string concatenation.
           entry: entryBody
         }
 
-      keyedEntry: (key, body) ->
+      informalCommentEntry: (possibleEntryBody) ->
+        possibleEntryBody = possibleEntryBody.trim()
 
+        if possibleEntryBody.length is 0
+          return false
+
+        entry = {
+          entryType: 'comment'
+          entry: possibleEntryBody
+        }
+
+      keyedEntry: (key, body) ->
         entry = {
           entryType: key
           citationKey: ''
@@ -252,6 +256,8 @@ Ignore lines without a valid `key = value`.
         for position in commas
           if @areStringDelimitersBalanced body[lastDelimitingComma...position]
             delimitingCommas.push lastDelimitingComma = position
+
+        delimitingCommas.push body.length
 
         fields = []
         lastDelimitingComma = 0
@@ -377,36 +383,74 @@ unparseable, so it should be returned unchanged.
         position = text.indexOf '"'
 
         # When the quotation mark is surrounded by unescaped brackets, keep looking.
-        while text[position - 1] is '{' and text[position - 2] isnt '\\' \
-        and text[position + 1] is '}' and position isnt -1
+        while @isEscapedWithBrackets text, position
           position = text.indexOf '"', position + 1
 
         position
 
       nextDelimitingBracket: (text) ->
-        numberOfOpeningBrackets = 1
-        numberOfClosingBrackets = 0
+        numberOfOpenBrackets = 1
 
         for position, character of text
-          if character is '{' and not @isEscapedWithBackslash(text, position)
-            numberOfOpeningBrackets++
-          else if character is '}' and not @isEscapedWithBackslash(text, position)
-            numberOfClosingBrackets++
+          position = toNumber position
 
-          if numberOfOpeningBrackets is numberOfClosingBrackets then return position
+          if character is '{' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenBrackets++
+          else if character is '}' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenBrackets--
+
+          if numberOfOpenBrackets is 0 then return position
 
         return -1
 
-      areStringDelimitersBalanced: (text, start, end) ->
+      nextDelimitingParenthesis: (text) ->
+        numberOfOpenParentheses = 1
+
+        for position, character of text
+          position = toNumber position
+
+          if character is '(' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenParentheses++
+          else if character is ')' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenParentheses--
+
+          if numberOfOpenParentheses is 0 then return position
+
+        return -1
+
+      areEntryDelimitersBalanced: (text) ->
+        numberOfOpenBrackets = 0
+        numberOfOpenParentheses = 0
+        numberOfQuotationMarks = 0
+
+        for position, character of text
+          position = toNumber position
+
+          if character is '{' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenBrackets++
+          else if character is '}' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenBrackets--
+          else if character is '(' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenParentheses++
+          else if character is ')' and not @isEscapedWithBackslash(text, position)
+            numberOfOpenParentheses--
+          else if character is '"' and not @isEscapedWithBrackets(text, position)
+            numberOfQuotationMarks++
+
+        numberOfOpenBrackets is 0 and numberOfQuotationMarks % 2 is 0
+
+      areStringDelimitersBalanced: (text) ->
         numberOfOpenBrackets = 0
         numberOfQuotationMarks = 0
 
-        for position, character of text[start..end]
-          if character is '{' and not @isEscapedWithBackslash(text, toNumber(position))
+        for position, character of text
+          position = toNumber position
+
+          if character is '{' and not @isEscapedWithBackslash(text, position)
             numberOfOpenBrackets++
-          else if character is '}' and not @isEscapedWithBackslash(text, toNumber(position))
+          else if character is '}' and not @isEscapedWithBackslash(text, position)
             numberOfOpenBrackets--
-          else if character is '"' and not @isEscapedWithBrackets(text, toNumber(position))
+          else if character is '"' and not @isEscapedWithBrackets(text, position)
             numberOfQuotationMarks++
 
         numberOfOpenBrackets is 0 and numberOfQuotationMarks % 2 is 0
