@@ -110,7 +110,7 @@ Find all `@`s.
 
           position++
 
-Filter the `@`s so that only the ones outside of quotes are kept.
+Filter the `@`s so that only the ones outside of string delimiters are kept.
 
         delimitingAts = []
         lastDelimitingAt = 0
