@@ -75,8 +75,6 @@ The `entries` array holds three types of entries:
 
       entries: []
 
-      toNumber: toNumber
-
       constructor: (@bibtex) ->
         return
 
