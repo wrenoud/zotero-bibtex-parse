@@ -78,7 +78,7 @@ The `entries` array holds three types of entries:
       toNumber: toNumber
 
       constructor: (@bibtex) ->
-        #pass
+        return
 
       parse: ->
         bibtexEntries = @findEntries()
@@ -116,11 +116,12 @@ Filter the `@`s so that only the ones outside of quotes are kept.
         lastDelimitingAt = 0
 
         for position in ats
-          if @areBracketsBalanced @bibtex[lastDelimitingAt...position]
+          if @areStringDelimitersBalanced @bibtex[lastDelimitingAt...position]
             delimitingAts.push lastDelimitingAt = position
 
         entries = []
-        numberOfEntries = delimitingAts.length
+        lastDelimitingAt = _.first delimitingAts
+        delimitingAts = _.rest(delimitingAts).concat(@bibtex.length)
 
 For each of the delimiting `@`s:
 1. Get the next such `@`
@@ -128,17 +129,10 @@ For each of the delimiting `@`s:
 3. ...that's the end of the entry
 
 
-        for index, position of delimitingAts
-          index = toNumber(index) # It's assumed a string key.
+        for position in delimitingAts
+          start = lastDelimitingAt + 1
 
-          start = position + 1
-
-          if index + 1 < numberOfEntries
-            next = delimitingAts[index + 1]
-          else
-            next = @bibtex.length
-
-          end = _.lastIndexOf @bibtex[...next], '}'
+          end = _.lastIndexOf @bibtex[...position], '}'
 
           entries.push @bibtex[start...end]
 
@@ -192,25 +186,51 @@ Handle possible string concatenation.
           entryTags: {}
         }
 
-Split entry body by newline + comma:
+Split entry body by comma which are neither in quotes nor brackets:
 
-        body = body.split(',\n')
+        fields = @findFieldsInEntryBody body
 
-The first line is the citation key.
+The first field is the citation key.
 
-        entry.citationKey = body.shift()
+        entry.citationKey = fields.shift()
 
-Iterate over the remaining lines of the body and parse the tags:
+Iterate over the remaining fields and parse the tags:
 
-        for line in body
-          [key, value] = _.invoke(line.split('='), 'trim')
+        for field in fields
+          [key, value] = _.invoke(@splitKeyAndValue(field), 'trim')
 
-Blank lines will not have a valid `key = value`, so ignore.
+Ignore lines without a valid `key = value`.
 
           if value
             entry.entryTags[key] = safelyJoinArrayElements(@splitValueByDelimiters(value), '')
 
         return entry
+
+      findFieldsInEntryBody: (body) ->
+        commas = []
+        position = 0
+
+        while (position = body.indexOf(',', position)) isnt -1
+          commas.push position
+
+          position++
+
+        delimitingCommas = []
+        lastDelimitingComma = 0
+
+        for position in commas
+          if @areStringDelimitersBalanced body[lastDelimitingComma...position]
+            delimitingCommas.push lastDelimitingComma = position
+
+        fields = []
+        lastDelimitingComma = 0
+
+        for position in delimitingCommas
+          fields.push body[lastDelimitingComma...position]
+
+          lastDelimitingComma = position + 1
+
+        return fields
 
 > ...some characters can not be put directly into a BibTeX-entry, as they would
 > conflict with the format description, like {, " or $. They need to be escaped
@@ -227,6 +247,24 @@ Blank lines will not have a valid `key = value`, so ignore.
           position--
 
         slashes % 2 is 1
+
+      isEscapedWithBrackets: (text, position) ->
+        text[position - 1] is '{' \
+        and @isEscapedWithBackslash(text, position - 1) \
+        and text[position + 1] is '}' \
+
+Probably we could safely ignore a case like `@isEscapedWithBracket '\\{\\}', 2`.
+
+        and @isEscapedWithBackslash(text, position + 1)
+
+      splitKeyAndValue: (text) ->
+        if (position = text.indexOf('=')) isnt -1
+          return [
+            text[...position]
+            text[(position + 1)..]
+          ]
+        else
+          return [text]
 
 > value is either :
 > * an integer,
@@ -328,21 +366,16 @@ unparseable, so it should be returned unchanged.
 
         return -1
 
-      areBracketsBalanced: (text, start, end) ->
-        numberOfOpeningBrackets = 0
-        numberOfClosingBrackets = 0
+      areStringDelimitersBalanced: (text, start, end) ->
+        numberOfOpenBrackets = 0
+        numberOfQuotationMarks = 0
 
         for position, character of text[start..end]
           if character is '{' and not @isEscapedWithBackslash(text, toNumber(position))
-            numberOfOpeningBrackets++
+            numberOfOpenBrackets++
           else if character is '}' and not @isEscapedWithBackslash(text, toNumber(position))
-            numberOfClosingBrackets++
+            numberOfOpenBrackets--
+          else if character is '"' and not @isEscapedWithBrackets(text, toNumber(position))
+            numberOfQuotationMarks++
 
-Just in case the end of our text was delimited by brackets, as in `{@}`. This
-isn't an obvious thing for this method to do, but it shouldn't return a false
-positive, and it may reduce false negatives.
-
-        if text[end - 1] is '{' and text[end + 1] is '}' and not @isEscapedWithBackslash(text, end - 1) and not @isEscapedWithBackslash(text, end + 1)
-          numberOfClosingBrackets++
-
-        numberOfOpeningBrackets is numberOfClosingBrackets
+        numberOfOpenBrackets is 0 and numberOfQuotationMarks % 2 is 0
