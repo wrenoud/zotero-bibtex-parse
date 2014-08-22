@@ -82,7 +82,7 @@ The `entries` array holds three types of entries:
         bibtexEntries = @findEntries()
 
         for entry in bibtexEntries
-          [entryType, entryBody] = @splitEntryTypeAndBody entry
+          [entryType, entryBody] = _.invoke(@splitEntryTypeAndBody(entry), 'trim')
 
           if not entryType then break # Skip this entry.
 
@@ -130,6 +130,37 @@ For each of the delimiting `@`s:
         for position in delimitingAts
           start = lastDelimitingAt + 1
 
+Go through the intervening string backwards looking for a closing bracket or
+parenthesis.
+
+N.B. This doesn't yet handle a case with an informal comment like:
+
+```bibtex
+@article {
+  title: {Leadership and trust in the {Iliad}}
+  author: {James Gould}
+}
+
+article {
+  title: {Inflection of irregular {Homeric} verbs}
+  author: {Lawrence Cantrell}
+}
+
+@book {
+  title: {Divine speech in {Homeric} and pseudo-{Homeric} poetry}
+  author: {Hedley Mansfield}
+}
+```
+
+This will, unfortunately, parse "Leadership and trust in the Iliad" and
+"Inflection of irregular Homeric verbs" together, in this case overwriting all
+the fields of "Leadership" with those of "Inflection"!
+
+          for character in @bibtex[...position] by -1
+            if character is '}' or character is ')'
+              end = character
+              break
+
           end = _.lastIndexOf @bibtex[...position], '}'
 
           entries.push @bibtex[start...end]
@@ -137,10 +168,12 @@ For each of the delimiting `@`s:
         return entries
 
       splitEntryTypeAndBody: (entry) ->
-        # Look ahead for '{' which is not escaped with backslashes.
-        end = entry.indexOf '{'
+        for character in entry
+          if (character is '{' or character is '(') and not @isEscapedWithBackslash(entry, character)
+            end = character
+            break
 
-        if end is -1
+        if not end?
           return false
 
         [
