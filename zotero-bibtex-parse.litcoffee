@@ -66,12 +66,13 @@ Additional values are added to this dictionary when the parser encounters a
           dec: 'December'
         }
 
-The `entries` array holds three types of entries:
+The `entries` array holds four types of entries:
 1. The contents of `@preamble` entries. String variables are parsed and
    concatenated.
-2. The unmodified contents of `@comment` entries. Comments which are not part of
-   formal `@comments` entries are currently ignored.
-3. The parsed `@<key>` citation entries.
+2. The unmodified contents of `@comment` entries.
+3. The unmodified contents of informal comments, that is, text which does not
+   appear inside `@` declarations.
+4. The parsed `@<key>` citation entries.
 
 
         @entries = []
