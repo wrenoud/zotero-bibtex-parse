@@ -181,7 +181,7 @@ Splits the incoming string by the equals sign and then performs the equivalent
 of `s.trim()` and removing leading or trailing quotations from each portion.
 
         [key, value] =_.map(entryBody.split('='), (s) ->
-          s.replace(/^(?:\s"?)+|(?:"?\s)+$/g, '')
+          s.replace(/^(?:\s*"?)+|(?:"?\s*)+$/g, '')
         )
 
         @strings[key] = value
