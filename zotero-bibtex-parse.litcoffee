@@ -46,24 +46,25 @@ This prevents turning arrays with a single numeric element into strings.
 Start defining the parser:
 
     module.exports = class BibtexParser
+      constructor: (@bibtex) ->
 
 Additional values are added to this dictionary when the parser encounters a
 `@string` entry.
 
-      strings: {
-        jan: 'January'
-        feb: 'February'
-        mar: 'March'
-        apr: 'April'
-        may: 'May'
-        jun: 'June'
-        jul: 'July'
-        aug: 'August'
-        sep: 'September'
-        oct: 'October'
-        nov: 'November'
-        dec: 'December'
-      }
+        @strings = {
+          jan: 'January'
+          feb: 'February'
+          mar: 'March'
+          apr: 'April'
+          may: 'May'
+          jun: 'June'
+          jul: 'July'
+          aug: 'August'
+          sep: 'September'
+          oct: 'October'
+          nov: 'November'
+          dec: 'December'
+        }
 
 The `entries` array holds three types of entries:
 1. The contents of `@preamble` entries. String variables are parsed and
@@ -73,9 +74,8 @@ The `entries` array holds three types of entries:
 3. The parsed `@<key>` citation entries.
 
 
-      entries: []
+        @entries = []
 
-      constructor: (@bibtex) ->
         return
 
       parse: ->
