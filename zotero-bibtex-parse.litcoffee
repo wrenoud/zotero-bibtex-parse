@@ -85,7 +85,7 @@ The `entries` array holds four types of entries:
         for entry in bibtexEntries
           [entryType, entryBody] = _.invoke(entry, 'trim')
 
-          if not entryType then break # Skip this entry.
+          if not entryType then continue # Skip this entry.
 
           entry = switch entryType.toLowerCase()
             when 'string' then @stringEntry entryBody
@@ -137,6 +137,7 @@ For each of the delimiting `@`s:
 
         for position in delimitingAts
           possibleEntry = @bibtex[lastDelimitingAt...position]
+          startOfBody = undefined
 
           lastDelimitingAt = position
 
@@ -149,7 +150,7 @@ If there were no unescaped opening parentheses or brackets, this block can't be
 parsed—just skip it.
 
           if not startOfBody?
-            break
+            continue
 
           delimitingCharacter = possibleEntry[startOfBody]
 
