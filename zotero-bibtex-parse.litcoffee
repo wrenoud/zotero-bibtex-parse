@@ -122,6 +122,13 @@ Filter the `@`s so that only the ones outside of string delimiters are kept.
         lastDelimitingAt = _.first delimitingAts
         delimitingAts = _.rest(delimitingAts).concat(@bibtex.length)
 
+Check for a possible informal comment right at the beginning.
+
+        informalCommentEntry = @informalCommentEntry(@bibtex[...lastDelimitingAt])
+
+        if informalCommentEntry
+          entries.push informalCommentEntry
+
 For each of the delimiting `@`s:
 1. Get the next unescaped opening parenthesis or bracket
 2. Look for the next delimiting closing parenthesis or bracket
@@ -320,7 +327,7 @@ Probably we could safely ignore a case like `@isEscapedWithBracket '\\{\\}', 2`.
       splitValueByDelimiters: (text) ->
         text = text.trim()
 
-        if isNumeric text then return [text * 1]
+        if isNumeric text then return [toNumber text]
 
         # If first character is quotation mark, use nextDelimitingQuotationMark
         # and go from there. Pursue similar policy with brackets.
@@ -373,6 +380,8 @@ unparseable, so it should be returned unchanged.
         if not position then return [text]
 
         if value
+          value = if isNumeric value then value = toNumber value else value
+
           split.push value
 
         if position < text.length - 1
