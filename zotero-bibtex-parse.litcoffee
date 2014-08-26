@@ -429,6 +429,15 @@ unparseable, so it should be returned unchanged.
 
         return -1
 
+When checking whether entry delimiters (`{}` and `()`) are balanced, this
+function ignores unescaped delimiters inside quotation marks. This is contrary
+to Xavier D'ecoret's definitions:
+
+> But braces must also be balanced inside quotes!
+
+:wrench: To fix this, all `@`s should be treated as delimiters unless one occurs
+after an odd number of quotes in a file.
+
       areEntryDelimitersBalanced: (text) ->
         numberOfOpenBrackets = 0
         numberOfOpenParentheses = 0
@@ -437,18 +446,18 @@ unparseable, so it should be returned unchanged.
         for position, character of text
           position = toNumber position
 
-          if character is '{' and not @isEscapedWithBackslash(text, position)
+          if character is '{' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
             numberOfOpenBrackets++
-          else if character is '}' and not @isEscapedWithBackslash(text, position)
+          else if character is '}' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
             numberOfOpenBrackets--
-          else if character is '(' and not @isEscapedWithBackslash(text, position)
+          else if character is '(' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
             numberOfOpenParentheses++
-          else if character is ')' and not @isEscapedWithBackslash(text, position)
+          else if character is ')' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
             numberOfOpenParentheses--
           else if character is '"' and not @isEscapedWithBrackets(text, position)
             numberOfQuotationMarks++
 
-        numberOfOpenBrackets is 0 and numberOfQuotationMarks % 2 is 0
+        numberOfOpenBrackets is 0 and numberOfOpenParentheses is 0
 
       areStringDelimitersBalanced: (text) ->
         numberOfOpenBrackets = 0
