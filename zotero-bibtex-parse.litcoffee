@@ -223,7 +223,7 @@ If this starts with an `@`, it's a malformed entry, not a comment.
 
       keyedEntry: (key, body) ->
         entry = {
-          entryType: key
+          entryType: key.toLowerCase()
           citationKey: ''
           entryTags: {}
         }
