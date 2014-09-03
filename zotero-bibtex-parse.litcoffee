@@ -99,32 +99,31 @@ The `entries` array holds four types of entries:
         return @entries
 
       findEntries: ->
-        ats = []
-        position = 0
 
-Find all `@`s.
+Find all `@`s followed by zero or more non-entry delimiting characters and an
+entry delimiter.
 
-        while (position = @bibtex.indexOf('@', position)) isnt -1
-          ats.push position
-
-          position++
-
-Filter the `@`s so that only the ones outside of string delimiters are kept.
+Generally, the use of `@` should be avoided when not used to start an entry. But
+some people insist on it, so we try to avoid situations in which it might be
+escaped. This would be easier if we weren't also trying to be resilient in the
+face of unmatched opening brackets in property values.
 
         delimitingAts = []
-        lastDelimitingAt = 0
+        entryPattern = /@[^@\(\)\{\}]*[\(\{]/gi
 
-        for position in ats
-          if @areEntryDelimitersBalanced @bibtex[lastDelimitingAt...position]
-            delimitingAts.push lastDelimitingAt = position
+        while (match = entryPattern.exec(@bibtex))?
+          delimitingAts.push [match.index, entryPattern.lastIndex - 1]
+
+        if not delimitingAts.length
+          return []
 
         entries = []
-        lastDelimitingAt = _.first delimitingAts
-        delimitingAts = _.rest(delimitingAts).concat(@bibtex.length)
+        lastDelimitingAt = delimitingAts[0]
+        delimitingAts = delimitingAts[1..].concat([@bibtex.length])
 
 Check for a possible informal comment right at the beginning.
 
-        informalCommentEntry = @informalCommentEntry(@bibtex[...lastDelimitingAt])
+        informalCommentEntry = @informalCommentEntry(@bibtex[...lastDelimitingAt[0]])
 
         if informalCommentEntry
           entries.push informalCommentEntry
@@ -135,49 +134,44 @@ For each of the delimiting `@`s:
 3. ...that's the end of the entry
 
 
-        for position in delimitingAts
-          possibleEntry = @bibtex[lastDelimitingAt...position]
-          startOfBody = undefined
+        for nextDelimitingAt in delimitingAts
+          [startOfEntry, startOfBody] = lastDelimitingAt
+          possibleBody = @bibtex[startOfBody...nextDelimitingAt[0]]
+          delimitingCharacter = possibleBody[0]
 
-          lastDelimitingAt = position
-
-          for index, character of possibleEntry
-            if (character is '{' or character is '(') and not @isEscapedWithBackslash(possibleEntry, character)
-              startOfBody = toNumber index
-              break
-
-If there were no unescaped opening parentheses or brackets, this block can't be
-parsed—just skip it.
-
-          if not startOfBody?
-            continue
-
-          delimitingCharacter = possibleEntry[startOfBody]
+          lastDelimitingAt = nextDelimitingAt
 
           switch delimitingCharacter
             when '{'
-              lengthOfBody = @nextDelimitingBracket possibleEntry[(startOfBody + 1)..]
+              lengthOfBody = @nextDelimitingBracket possibleBody[1..]
             when '('
-              lengthOfBody = @nextDelimitingParenthesis possibleEntry[(startOfBody + 1)..]
+              lengthOfBody = @nextDelimitingParenthesis possibleBody[1..]
 
-If lengthOfBody is -1, a closing delimiter couldn't be found. Because the parser
-ignores `@`s which are inside delimiters, this shouldn't happen unless this is
-the last entry in the file.
+If lengthOfBody is -1, a closing delimiter couldn't be found. If this happens,
+either:
+1. The entry is malformed, or
+2. There is an unbalanced opening bracket or quote, or
+3. There's a string inside the entry which matches the regular expression used
+   to match the beginnings of entries.
 
-          if lengthOfBody? and lengthOfBody isnt -1
-            endOfBody = startOfBody + lengthOfBody + 1
+:wrench: The final two cases should be distinguishable because it ought to have
+unbalanced quotes or brackets. Unfortunately, I don't know how we could
+distinguish those from each other.
+
+          if not lengthOfBody? or lengthOfBody is -1
+            endOfBody = possibleBody.length
           else
-            endOfBody = possibleEntry.length
+            endOfBody = lengthOfBody + 1
 
           entries.push [
-            possibleEntry[1...startOfBody]
-            possibleEntry[(startOfBody + 1)...endOfBody]
+            @bibtex[(startOfEntry + 1)...startOfBody]
+            possibleBody[1...endOfBody]
           ]
 
 Check for an informal comment (any text that isn't inside an `@` block) and
 append it if there happens to be one.
 
-          informalCommentEntry = @informalCommentEntry(possibleEntry[(endOfBody + 1)..])
+          informalCommentEntry = @informalCommentEntry(possibleBody[(endOfBody + 1)..])
 
           if informalCommentEntry
             entries.push informalCommentEntry
@@ -215,7 +209,11 @@ Handle possible string concatenation.
       informalCommentEntry: (possibleEntryBody) ->
         possibleEntryBody = possibleEntryBody.trim()
 
-        if possibleEntryBody.length is 0
+        if possibleEntryBody.length is 0 or
+
+If this starts with an `@`, it's a malformed entry, not a comment.
+
+           possibleEntryBody[0] is '@'
           return false
 
         entry = {
@@ -319,7 +317,6 @@ Probably we could safely ignore a case like `@isEscapedWithBracket '\\{\\}', 2`.
 > * ...also...a single word can be valid if it has been defined as a string.
 > * [also, string concatenation]
 
-
 > Inside the braces, you can have arbitrarily nested pairs of braces. But braces
 > must also be balanced inside quotes! Inside quotes, ... You must place
 > [additional] quotes inside braces. You can have a `@` inside a quoted values
@@ -377,7 +374,6 @@ If:
 then position is 0 and value is an empty string—text was effectively
 unparseable, so it should be returned unchanged.
 
-
         if not position then return [text]
 
         if value
@@ -428,36 +424,6 @@ unparseable, so it should be returned unchanged.
           if numberOfOpenParentheses is 0 then return position
 
         return -1
-
-When checking whether entry delimiters (`{}` and `()`) are balanced, this
-function ignores unescaped delimiters inside quotation marks. This is contrary
-to Xavier D'ecoret's definitions:
-
-> But braces must also be balanced inside quotes!
-
-:wrench: To fix this, all `@`s should be treated as delimiters unless one occurs
-after an odd number of quotes in a file.
-
-      areEntryDelimitersBalanced: (text) ->
-        numberOfOpenBrackets = 0
-        numberOfOpenParentheses = 0
-        numberOfQuotationMarks = 0
-
-        for position, character of text
-          position = toNumber position
-
-          if character is '{' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
-            numberOfOpenBrackets++
-          else if character is '}' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
-            numberOfOpenBrackets--
-          else if character is '(' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
-            numberOfOpenParentheses++
-          else if character is ')' and numberOfQuotationMarks % 2 is 0 and not @isEscapedWithBackslash(text, position)
-            numberOfOpenParentheses--
-          else if character is '"' and not @isEscapedWithBrackets(text, position)
-            numberOfQuotationMarks++
-
-        numberOfOpenBrackets is 0 and numberOfOpenParentheses is 0
 
       areStringDelimitersBalanced: (text) ->
         numberOfOpenBrackets = 0
