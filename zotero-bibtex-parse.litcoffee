@@ -77,6 +77,8 @@ The `entries` array holds four types of entries:
 
         @entries = []
 
+        @parse()
+
         return
 
       parse: ->
