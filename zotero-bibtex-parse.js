@@ -37,7 +37,6 @@
         dec: 'December'
       };
       this.entries = [];
-      this.parse();
       return;
     }
 
@@ -332,5 +331,3 @@
   })();
 
 }).call(this);
-
-//# sourceMappingURL=zotero-bibtex-parse.js.map
