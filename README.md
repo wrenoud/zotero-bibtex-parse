@@ -1,51 +1,79 @@
 zotero-bibtex-parse
 =============
-A JavaScript library that parses (Zotero-flavored) BibTeX parser. Forked from ORCID's
+A JavaScript library that parses (Zotero-flavored) BibTeX. Forked from ORCID's
 [bibtexParseJs](https://github.com/ORCID/bibtexParseJs).
 
-There are very few differences from ORCID's version, made for compatibility with the BibTeX output provided by Zotero's built-in BibTeX translator and [Robin Wilson's adaptation](http://www.rtwilson.com/academic/autozotbib) of [spartanroc's BibTeX translator](https://gist.github.com/spartanroc/956623), namely:
+This branch, `resilient`, represents a significant departure from ORCID's
+version. Instead of parsing incrementally, this version attempts to identify the
+edges of BibTeX entries so that if something goes wrong while parsing an entry,
+it can simply move on to the next entry.
 
-1. Re-introduction of Mikola Lysenko's support for unquoted and unbracketed month-name abbreviations (which seems to be standard Bibtex).
-2. Support for entries the type of which Zotero doesn't know and which are therefore labeled as '????', '????-1', etc. (which I doubt is BibTeX at all).
-
-I've tested these changes in Node.js against a small BibTeX file (30 entries) of very varied citations. File an [issue](https://github.com/apcshields/zotero-bibtex-parse/issues) if you find something I've missed.
+Testing has improved and now uses [Jasmine](http://jasmine.github.io/1.3/introduction.html).
+Please file an [issue](https://github.com/apcshields/zotero-bibtex-parse/issues)
+if you find something I've missed.
 
 ## Using in Browser
-Include zotero-bibtex-parse.js and call
-
-```
-bibtexParse.toJSON('@article{sample1,title={sample title}}');
-```
+The `resilient` branch has dropped support for in-browser use.
 
 ## Using in [Node.js](http://nodejs.org/)
-Install     ```npm install zotero-bibtex-parse```
+Install ```npm install git://github.com/apcshields/zotero-bibtex-parse.git#resilient```
 
-```
-var bibtexParse = require('zotero-bibtex-parse');
+```javascript
+BibtexParser = require('zotero-bibtex-parse');
 
-var sample = bibtexParse.toJSON('@article{sample1,title={sample title}}');
+parser = new BibtexParser('@article{sample1,title={sample title}}');
+
+sample = parser.parse()
 
 console.log(sample);
 ```
 
-**Returns** A parsed BibTeX file as a JSON Array Object
+**Returns** A parsed BibTeX file as a Javascript object:
 
-```
-[ { citationKey: 'SAMPLE1',
-    entryType: 'ARTICLE',
-    entryTags: { TITLE: 'sample title' } } ]
+```javascript
+[ { entryType: 'article',
+    citationKey: 'sample1',
+    entryTags: { title: 'sample title' } } ]
 ```
 
 ## Contributing
-Contributions are welcome. Please make sure the unit test(test/runTest.js) reflects the changes and completes successfully.
-
+Contributions are welcome. Please make sure the Jasmine specs
+(```spec/```) reflect the changes and complete successfully.
 
 ## Credits
+Early versions of this package were based on:
+
 (c) 2010 Henrik Muehe. (MIT License)
 [visit](https://code.google.com/p/bibtex-js/)
-
 
 CommonJS port maintained by Mikola Lysenko
 [visit](https://github.com/mikolalysenko/bibtex-parser)
 
-Lightly modified from ORCID's (rcpeter's) adaptation.
+ORCID's (rcpeter's) adaptation.
+
+## License
+
+This software is licensed under an MIT license, as follows:
+
+Copyright © 2014 Andrew Shields
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name(s) of the above copyright holders
+shall not be used in advertising or otherwise to promote the sale, use or other
+dealings in this Software without prior written authorization.

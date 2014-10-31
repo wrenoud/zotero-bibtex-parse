@@ -1,20 +1,14 @@
 {
   "name": "zotero-bibtex-parse",
-  "version": "0.0.14",
+  "version": "1.0.0",
   "description": "A JavaScript library that parses (Zotero-flavor) BibTeX to JSON",
   "main": "zotero-bibtex-parse.js",
-  "directories": {
-    "test": "test"
-  },
   "dependencies": {
     "underscore-plus": "^1.6.1"
   },
-  "scripts": {
-    "test": "node test/runTest.js"
-  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/apcshields/zotero-bibtex-parse"
+    "url": "https://github.com/apcshields/zotero-bibtex-parse#resilient"
   },
   "keywords": [
     "bibtex",
@@ -23,8 +17,7 @@
     "parser"
   ],
   "contributors": [
-    "apcshields",
-    "rcpeters"
+    "apcshields"
   ],
   "license": "MIT",
   "bugs": {
