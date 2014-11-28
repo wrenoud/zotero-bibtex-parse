@@ -500,10 +500,10 @@
 			if (item.entryTags) {
 				var tags = '';
 				for (jdx in item.entryTags) {
-					var val = item.entryTags[jdx].toString();
+					var val = item.entryTags[jdx];
 					if(val !== undefined)
 					{
-						tags += jdx + '= {' + latexToUTF8.encodeLatex(val) + '}';
+						tags += jdx + '= {' + latexToUTF8.encodeLatex(val.toString()) + '}';
 						tags += ', ';
 					}
 				}
