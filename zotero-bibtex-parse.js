@@ -500,9 +500,11 @@
 			if (item.entryTags) {
 				var tags = '';
 				for (jdx in item.entryTags) {
-					tags += ', ';
 					if(item.entryTags[jdx])
+					{
+						tags += ', ';
 						tags += jdx + '= {' + latexToUTF8.encodeLatex(item.entryTags[jdx]) + '}';
+					}
 				}
 				tags = tags.slice(0,-2);
 				out += tags;
