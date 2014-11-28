@@ -502,8 +502,8 @@
 				for (jdx in item.entryTags) {
 					if(item.entryTags[jdx])
 					{
-						tags += ', ';
 						tags += jdx + '= {' + latexToUTF8.encodeLatex(item.entryTags[jdx]) + '}';
+						tags += ', ';
 					}
 				}
 				tags = tags.slice(0,-2);
