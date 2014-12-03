@@ -501,7 +501,7 @@
 				var tags = '';
 				for (jdx in item.entryTags) {
 					var val = item.entryTags[jdx];
-					if(val !== undefined || val !== null)
+					if(val !== undefined && val !== null)
 					{
 						tags += jdx + '= {' + latexToUTF8.encodeLatex(val.toString()) + '}';
 						tags += ', ';
